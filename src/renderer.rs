@@ -37,6 +37,26 @@ const TEXTURED_FULL_SCREEN_QUAD_VERTICES: &[Vertex] = &[
     Vertex { position: [-1.0, -1.0, 0.0], uv: [0.0, 1.0] }
 ];
 
+struct ModelData {
+
+}
+
+impl ModelData {
+    fn new(filepath: &Path) -> Self {
+        
+    }
+}
+
+struct Model {
+
+}
+
+struct ModelRenderer {
+}
+
+impl ModelRenderer {
+}
+
 // The background for a field. Can be rendered with FieldBackgroundRenderer.
 pub struct FieldBackground {
     background_texture: Texture,
@@ -112,13 +132,40 @@ impl FieldBackground {
     pub fn get_texture(&self) -> &Texture {
         &self.background_texture
     }
+
 }
+
+// // We need this for Rust to store our data correctly for the shaders
+// #[repr(C)]
+// // This is so we can store this in a buffer
+// #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+// struct FieldBackgroundRendererUniform {
+//     screen_size: [usize; 2],
+//     background_size: [usize; 2],
+//     center: [f32; 2],
+// }
+
+// impl FieldBackgroundRendererUniform {
+//     fn new() -> Self {
+//         Self {
+//             screen_size: [SCREEN_WIDTH, SCREEN_HEIGHT],
+//             background_size: [SCREEN_WIDTH, SCREEN_HEIGHT],
+//             center: [SCREEN_WIDTH as f32 / 2.0, SCREEN_HEIGHT as f32 / 2.0]
+//         }
+//     }
+
+//     fn set_background_size(&mut self, width: usize, height: usize) {
+//         self.background_size[0] = width;
+//         self.background_size[1] = height;
+//     }
+// }
 
 // Draw a field background to a surface. 
 pub struct FieldBackgroundRenderer {
     render_pipeline: RenderPipeline,
     bind_group_layout: BindGroupLayout,
-    vertex_buffer: Buffer
+    vertex_buffer: Buffer,
+    //uniform_buffer: Buffer,
 }
 
 impl FieldBackgroundRenderer {
@@ -133,6 +180,9 @@ impl FieldBackgroundRenderer {
                 usage: wgpu::BufferUsages::VERTEX
             }
         );
+
+        // Create a buffer containing information about the camera.
+        // TODO
 
         // Bind group layout.
         // We need to sample the background texture in our shader.
@@ -248,9 +298,6 @@ impl FieldBackgroundRenderer {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-
-            // Set the viewport.
-            render_pass.set_viewport(0.1, 0.1, 0.5, 0.5, 0.0, 1.0);
 
             // Bind the texture.
             render_pass.set_bind_group(0, &bind_group, &[]);
