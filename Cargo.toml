@@ -1,0 +1,15 @@
+[package]
+name = "ps_rpg_engine"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+winit = "0.27.5"
+env_logger = "0.9"
+log = "0.4"
+wgpu = "0.14.2"
+bytemuck = { version = "1.12", features = [ "derive" ] }
+tokio = { version = "1.24.1", features = ["full"] }
+image = "0.24.5"
