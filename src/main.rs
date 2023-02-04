@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use renderer::model_data::ModelData;
 use winit::{event_loop::{EventLoop, ControlFlow}, window::{WindowBuilder}, event::{Event, WindowEvent}};
 
 mod renderer;
@@ -16,6 +15,8 @@ pub async fn run_game_window() {
 
     // Run the event loop.
     event_loop.run(move |event, _, control_flow| {
+        log::debug!("{:?}", event);
+
         match event {
             // Draw
             Event::RedrawRequested(window_id) if window_id == window.id() => match renderer.render() {
