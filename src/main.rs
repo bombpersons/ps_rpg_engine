@@ -1,3 +1,6 @@
+use std::path::Path;
+
+use renderer::model_data::ModelData;
 use winit::{event_loop::{EventLoop, ControlFlow}, window::{WindowBuilder}, event::{Event, WindowEvent}};
 
 mod renderer;
@@ -48,5 +51,7 @@ pub async fn run_game_window() {
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
+
     run_game_window().await;
 }

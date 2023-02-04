@@ -3,6 +3,10 @@ use std::path::Path;
 use wgpu::{Device, Queue, RenderPipeline, Surface, SurfaceConfiguration, Texture, TextureDescriptor, TextureView, Sampler, BindGroupLayout, TextureViewDescriptor, util::DeviceExt, Buffer, TextureFormat};
 use winit::window::Window;
 
+use self::model_data::ModelData;
+
+pub mod model_data;
+
 const SCREEN_WIDTH: usize = 640;
 const SCREEN_HEIGHT: usize = 800;
 
@@ -37,18 +41,7 @@ const TEXTURED_FULL_SCREEN_QUAD_VERTICES: &[Vertex] = &[
     Vertex { position: [-1.0, -1.0, 0.0], uv: [0.0, 1.0] }
 ];
 
-struct ModelData {
-
-}
-
-impl ModelData {
-    fn new(filepath: &Path) -> Self {
-        
-    }
-}
-
 struct Model {
-
 }
 
 struct ModelRenderer {
@@ -608,6 +601,9 @@ impl Renderer {
             multiview: None
         });
         
+        // Uh try and load a model I guess for testing.
+        let model = ModelData::new(&device, Path::new("models/base.glb"));
+
         Self {
             device,
             queue,
