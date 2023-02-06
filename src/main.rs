@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::{Path, PathBuf}, collections::HashMap};
 use winit::{event_loop::{EventLoop, ControlFlow}, window::{WindowBuilder}, event::{Event, WindowEvent}};
 use bevy_ecs::prelude::*;
 
@@ -18,6 +18,19 @@ async fn main() {
     
     // Create the bevy world.
     let mut world = World::new();
+
+    world.spawn(
+     renderer::field::FieldBackground { background_image: "test_background".to_string() } 
+    );
+
+    // Add texture manager.
+    let textures = {
+      let mut map = HashMap::new();
+      map.insert("test_background".to_string(), PathBuf::from(r"fields/test_field.png"));
+
+      map
+    };
+    world.insert_resource(renderer::texture_manager::TextureManager::new(textures));
 
     // Create a schedule for the renderer.
     let mut render_schedule = Schedule::default();

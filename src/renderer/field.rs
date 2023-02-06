@@ -1,137 +1,33 @@
 use std::path::Path;
 
-use bevy_ecs::prelude::Component;
+use bevy_ecs::prelude::*;
 use wgpu::{Texture, Sampler, Device, Queue, RenderPipeline, BindGroupLayout, Buffer, TextureFormat, util::DeviceExt, TextureView, TextureViewDescriptor};
 
 use super::fullscreen_quad;
 
-// #[derive(Component, Debug)]
-// pub struct FieldBackground {
-//   background_image: String
-// }
-
-// #[derive(Resource, Debug)]
-// pub struct FieldBackgroundRendererResource {
-
-// }
-
-// The background for a field. Can be rendered with FieldBackgroundRenderer.
+// Component that deterimines which texture is used for the field background.
+#[derive(Component, Debug)]
 pub struct FieldBackground {
-  background_texture: Texture,
-  background_sampler: Sampler,
+  pub background_image: String
 }
 
-impl FieldBackground {
-  pub fn new(device: &Device, queue: &Queue, image_path: &Path) -> Self {
-      // Load the image.
-      // TODO error handling.
-      let image = image::io::Reader::open(image_path)
-          .unwrap().decode().unwrap();
-      let image = image.to_rgba8();
-
-      // Create the texture in wgpu.
-      let texture_desc = wgpu::TextureDescriptor {
-          label: Some("Field Background Texture"),
-          size: wgpu::Extent3d {
-              width: image.width(),
-              height: image.height(),
-              depth_or_array_layers: 1
-          },
-          mip_level_count: 1, 
-          sample_count: 1,
-          dimension: wgpu::TextureDimension::D2,
-          format: wgpu::TextureFormat::Rgba8UnormSrgb,
-          usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST
-      };
-      let texture = device.create_texture(&texture_desc);
-
-      // Write the texture data to the texture.
-      queue.write_texture(
-          wgpu::ImageCopyTexture {
-              texture: &texture,
-              mip_level: 0,
-              origin: wgpu::Origin3d::ZERO,
-              aspect: wgpu::TextureAspect::All
-          },
-          bytemuck::cast_slice(image.as_flat_samples().as_slice()),
-          wgpu::ImageDataLayout {
-              offset: 0,
-              bytes_per_row: std::num::NonZeroU32::new(std::mem::size_of::<u8>() as u32 * 4 * image.width()),
-              rows_per_image: std::num::NonZeroU32::new(image.height())
-          },
-          wgpu::Extent3d {
-              width: image.width(),
-              height: image.height(),
-              depth_or_array_layers: 1
-          }
-      );
-
-      // Create a sampler.
-      let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-          address_mode_u: wgpu::AddressMode::ClampToEdge,
-          address_mode_v: wgpu::AddressMode::ClampToEdge,
-          address_mode_w: wgpu::AddressMode::ClampToEdge,
-          mag_filter: wgpu::FilterMode::Linear,
-          min_filter: wgpu::FilterMode::Linear,
-          mipmap_filter: wgpu::FilterMode::Linear,
-          ..Default::default()
-      });
-
-      Self {
-          background_texture: texture,
-          background_sampler: sampler
-      }
-  }
-
-  pub fn get_sampler(&self) -> &Sampler {
-      &self.background_sampler
-  }
-
-  pub fn get_texture(&self) -> &Texture {
-      &self.background_texture
-  }
-
-}
-
-// // We need this for Rust to store our data correctly for the shaders
-// #[repr(C)]
-// // This is so we can store this in a buffer
-// #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-// struct FieldBackgroundRendererUniform {
-//     screen_size: [usize; 2],
-//     background_size: [usize; 2],
-//     center: [f32; 2],
-// }
-
-// impl FieldBackgroundRendererUniform {
-//     fn new() -> Self {
-//         Self {
-//             screen_size: [SCREEN_WIDTH, SCREEN_HEIGHT],
-//             background_size: [SCREEN_WIDTH, SCREEN_HEIGHT],
-//             center: [SCREEN_WIDTH as f32 / 2.0, SCREEN_HEIGHT as f32 / 2.0]
-//         }
-//     }
-
-//     fn set_background_size(&mut self, width: usize, height: usize) {
-//         self.background_size[0] = width;
-//         self.background_size[1] = height;
-//     }
-// }
-
-// Draw a field background to a surface. 
-pub struct FieldBackgroundRenderer {
+// Resource for the system that draws the field background.
+#[derive(Resource, Debug)]
+pub (super) struct FieldBackgroundRendererResource {
   render_pipeline: RenderPipeline,
   bind_group_layout: BindGroupLayout,
   vertex_buffer: Buffer,
-  //uniform_buffer: Buffer,
+
+  sampler: Sampler
 }
 
-impl FieldBackgroundRenderer {
-  pub fn new(device: &Device, output_format: TextureFormat) -> Self {
-      let shader = device.create_shader_module(wgpu::include_wgsl!("field_background.wgsl"));
+impl FromWorld for FieldBackgroundRendererResource {
+  fn from_world(world: &mut World) -> Self {
+    world.resource_scope(|world, context: Mut<super::RenderContext>| {
+      let shader = context.device.create_shader_module(wgpu::include_wgsl!("field_background.wgsl"));
 
       // Create a vertex buffer containing a quad.
-      let vertex_buffer = device.create_buffer_init(
+      let vertex_buffer = context.device.create_buffer_init(
           &wgpu::util::BufferInitDescriptor {
               label: Some("Field Background Vertex Buffer"),
               contents: bytemuck::cast_slice(fullscreen_quad::POS_TEX_VERTICES),
@@ -144,7 +40,7 @@ impl FieldBackgroundRenderer {
 
       // Bind group layout.
       // We need to sample the background texture in our shader.
-      let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+      let bind_group_layout = context.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
           entries: &[
               wgpu::BindGroupLayoutEntry {
                   binding: 0,
@@ -167,12 +63,12 @@ impl FieldBackgroundRenderer {
       });
 
       // Create a render pipeline.
-      let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+      let render_pipeline_layout = context.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
           label: Some("Field Background Render Pipeline Layout"),
           bind_group_layouts: &[&bind_group_layout],
           push_constant_ranges: &[]
       });
-      let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+      let render_pipeline = context.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
           label: Some("Field Background Render Pipeline"),
           layout: Some(&render_pipeline_layout),
           vertex: wgpu::VertexState {
@@ -186,7 +82,7 @@ impl FieldBackgroundRenderer {
               module: &shader,
               entry_point: "fs_main",
               targets: &[Some(wgpu::ColorTargetState {
-                  format: output_format,
+                  format: context.post_process_texture_format,
                   blend: None,
                   write_mask: wgpu::ColorWrites::ALL,
               })],
@@ -209,62 +105,85 @@ impl FieldBackgroundRenderer {
           multiview: None
       });
 
-      Self {
-          render_pipeline,
-          bind_group_layout,
-          vertex_buffer
-      }
-  }
-
-  pub fn render(&mut self, device: &Device, queue: &Queue, dest_view: &TextureView, field_background: &FieldBackground) {
-      let texture = field_background.get_texture();
-      let texture_view = texture.create_view(&TextureViewDescriptor::default());
-
-      let bind_group = device.create_bind_group(
-          &wgpu::BindGroupDescriptor {
-              label: Some("Field Background Renderer Bind Group"),
-              layout: &self.bind_group_layout,
-              entries: &[
-                  wgpu::BindGroupEntry {
-                      binding: 0,
-                      resource: wgpu::BindingResource::TextureView(&texture_view)
-                  },
-                  wgpu::BindGroupEntry {
-                      binding: 1,
-                      resource: wgpu::BindingResource::Sampler(field_background.get_sampler())
-                  }
-              ]
-          }
-      );
-
-      let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-          label: Some("Field Background Renderer Encoder.")
+      // Create a sampler.
+      let sampler = context.device.create_sampler(&wgpu::SamplerDescriptor {
+          address_mode_u: wgpu::AddressMode::ClampToEdge,
+          address_mode_v: wgpu::AddressMode::ClampToEdge,
+          address_mode_w: wgpu::AddressMode::ClampToEdge,
+          mag_filter: wgpu::FilterMode::Nearest,
+          min_filter: wgpu::FilterMode::Nearest,
+          mipmap_filter: wgpu::FilterMode::Nearest,
+          ..Default::default()
       });
-
-      {
-          let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-              label: Some("Field Background Renderer Render Pass"),
-              color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                  view: &dest_view,
-                  resolve_target: None,
-                  ops: wgpu::Operations {
-                      load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                      store: true
-                  }
-              })],
-              depth_stencil_attachment: None
-          });
-
-          render_pass.set_pipeline(&self.render_pipeline);
-
-          // Bind the texture.
-          render_pass.set_bind_group(0, &bind_group, &[]);
-          
-          // Set the vertex buffer and draw.
-          render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-          render_pass.draw(0..fullscreen_quad::POS_TEX_VERTICES.len() as u32, 0..1);
+      
+      Self {
+        render_pipeline,
+        bind_group_layout,
+        vertex_buffer,
+        sampler
       }
+    })
+  }
+}
 
-      queue.submit(Some(encoder.finish()));
+pub (super) fn render(query: Query<&FieldBackground>, context: Res<super::RenderContext>, resource: Local<FieldBackgroundRendererResource>, 
+  mut texture_manager: ResMut<super::texture_manager::TextureManager>) {
+  
+  let dest_view = context.post_process_texture.create_view(&TextureViewDescriptor::default());
+
+  log::debug!("Rendering field backgrounds!");
+
+  for field_background in query.iter() {
+    log::debug!("Rendering field background: {}", &field_background.background_image);
+
+    let texture = texture_manager.get_texture(&context.device, &context.queue, &field_background.background_image).unwrap();
+    let texture_view = texture.create_view(&TextureViewDescriptor::default());
+
+    let bind_group = context.device.create_bind_group(
+        &wgpu::BindGroupDescriptor {
+            label: Some("Field Background Renderer Bind Group"),
+            layout: &resource.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture_view)
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&resource.sampler)
+                }
+            ]
+        }
+    );
+  
+    let mut encoder = context.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("Field Background Renderer Encoder.")
+    });
+  
+    {
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Field Background Renderer Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &dest_view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                    store: true
+                }
+            })],
+            depth_stencil_attachment: None
+        });
+  
+        render_pass.set_pipeline(&resource.render_pipeline);
+  
+        // Bind the texture.
+        render_pass.set_bind_group(0, &bind_group, &[]);
+        
+        // Set the vertex buffer and draw.
+        render_pass.set_vertex_buffer(0, resource.vertex_buffer.slice(..));
+        render_pass.draw(0..fullscreen_quad::POS_TEX_VERTICES.len() as u32, 0..1);
+    }
+  
+    context.queue.submit(Some(encoder.finish()));
   }
 }

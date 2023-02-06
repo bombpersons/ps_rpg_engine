@@ -233,5 +233,6 @@ pub fn init<W: HasRawWindowHandle + HasRawDisplayHandle>(world: &mut World, wind
     SystemSet::new().label("Render Systems")
         .with_system(resize)
         .with_system(render)
+        .with_system(field::render)
         .with_system(post_process::render)
 }
