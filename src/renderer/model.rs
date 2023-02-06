@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::Path, sync::Arc, collections::HashMap};
 
 use gltf::Gltf;
 use log::{debug, info, log, trace};
@@ -46,15 +46,6 @@ const CUBE_MODEL_VERTICES: &[ModelVertex] = &[
     ModelVertex { position: [0.5, 0.5, 0.5], color: [0.0, 1.0, 0.0], uv: [1.0, 0.0] },
 ];
 
-struct Model {
-}
-
-struct ModelRenderer {
-}
-
-impl ModelRenderer {
-}
-
 pub struct ModelData {
     vertex_buffer: Buffer
 }
@@ -95,4 +86,11 @@ impl ModelData {
             vertex_buffer
         }
     }
+}
+
+struct ModelRenderer {
+    bank: HashMap<String, ModelData>
+}
+
+impl ModelRenderer {
 }

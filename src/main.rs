@@ -1,17 +1,32 @@
 use std::path::Path;
-
 use winit::{event_loop::{EventLoop, ControlFlow}, window::{WindowBuilder}, event::{Event, WindowEvent}};
+use bevy_ecs::prelude::*;
 
 mod renderer;
 
-// Run the game window. This won't return until the window closes.
-pub async fn run_game_window() {
-    // Create the window.
+#[derive(StageLabel)]
+pub struct RenderStage;
+
+#[tokio::main]
+async fn main() {
+    // Initialize the logger.
+    env_logger::init();
+
+    // Create a window.
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
+    
+    // Create the bevy world.
+    let mut world = World::new();
 
-    // Create the renderer.
-    let mut renderer = renderer::Renderer::new(&window).await;
+    // Create a schedule for the renderer.
+    let mut render_schedule = Schedule::default();
+
+    // Add render system.
+    let render_systemset = renderer::init(&mut world, &window);
+    render_schedule.add_stage(RenderStage, SystemStage::single_threaded()
+        .with_system_set(render_systemset)
+    );
 
     // Run the event loop.
     event_loop.run(move |event, _, control_flow| {
@@ -19,9 +34,8 @@ pub async fn run_game_window() {
 
         match event {
             // Draw
-            Event::RedrawRequested(window_id) if window_id == window.id() => match renderer.render() {
-                Ok(_) => {}
-                Err(e) => eprintln!("{:?}", e),
+            Event::RedrawRequested(window_id) if window_id == window.id() => {
+                render_schedule.run(&mut world);
             },
 
             Event::MainEventsCleared => {
@@ -35,11 +49,11 @@ pub async fn run_game_window() {
             } if window_id == window.id() => match event {
                 // Resized window.
                 WindowEvent::Resized(physical_size) => {
-                    renderer.resize(*physical_size);
+                    //renderer.resize(*physical_size);
                 },
 
                 WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                    renderer.resize(**new_inner_size);
+                    //renderer.resize(**new_inner_size);
                 },
 
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
@@ -48,11 +62,6 @@ pub async fn run_game_window() {
             _ => {}
         }
     });
-}
 
-#[tokio::main]
-async fn main() {
-    env_logger::init();
-
-    run_game_window().await;
+    //run_game_window().await;
 }
