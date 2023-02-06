@@ -1,8 +1,19 @@
 use std::path::Path;
 
+use bevy_ecs::prelude::Component;
 use wgpu::{Texture, Sampler, Device, Queue, RenderPipeline, BindGroupLayout, Buffer, TextureFormat, util::DeviceExt, TextureView, TextureViewDescriptor};
 
 use super::fullscreen_quad;
+
+// #[derive(Component, Debug)]
+// pub struct FieldBackground {
+//   background_image: String
+// }
+
+// #[derive(Resource, Debug)]
+// pub struct FieldBackgroundRendererResource {
+
+// }
 
 // The background for a field. Can be rendered with FieldBackgroundRenderer.
 pub struct FieldBackground {

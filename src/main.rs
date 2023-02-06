@@ -49,11 +49,15 @@ async fn main() {
             } if window_id == window.id() => match event {
                 // Resized window.
                 WindowEvent::Resized(physical_size) => {
-                    //renderer.resize(*physical_size);
+                  world.resource_scope(|_, mut viewport: Mut<renderer::Viewport>| {
+                    viewport.set_size((*physical_size).width, (*physical_size).height);
+                  });
                 },
 
                 WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                    //renderer.resize(**new_inner_size);
+                  world.resource_scope(|_, mut viewport: Mut<renderer::Viewport>| {
+                    viewport.set_size((**new_inner_size).width, (**new_inner_size).height);
+                  });
                 },
 
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
