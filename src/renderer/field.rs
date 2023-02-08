@@ -1,14 +1,91 @@
 use std::path::Path;
 
 use bevy_ecs::prelude::*;
+use cgmath::SquareMatrix;
+use gltf::{Gltf, camera::{Orthographic, Perspective, Projection}};
 use wgpu::{Texture, Sampler, Device, Queue, RenderPipeline, BindGroupLayout, Buffer, TextureFormat, util::DeviceExt, TextureView, TextureViewDescriptor};
 
 use super::fullscreen_quad;
 
+#[rustfmt::skip]
+pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 0.5, 0.0,
+    0.0, 0.0, 0.5, 1.0,
+);
+
 // Component that deterimines which texture is used for the field background.
-#[derive(Component, Debug)]
-pub struct FieldBackground {
-  pub background_image: String
+#[derive(Resource, Debug)]
+pub struct Field {
+  pub background_image_name: String,
+  pub background_depth_name: String,
+  pub view_proj: cgmath::Matrix4<f32>
+}
+
+impl Field {
+  pub fn from_gltf(background_image_name: &str, background_depth_name: &str, gltf_path: &Path) -> Self {
+    let gltf = Gltf::open(gltf_path)
+      .expect("Couldn't open field gltf file.");
+
+    let aspect = super::SCREEN_WIDTH as f32 / super::SCREEN_HEIGHT as f32;
+
+
+    // Look for a camera.
+    // TODO: make this more rubust.
+    let view_proj = {
+      let mut view_proj = cgmath::Matrix4::identity();
+
+      fn find_camera_matrix(aspect: f32, node: gltf::Node, transform: cgmath::Matrix4<f32>) -> Option<cgmath::Matrix4<f32>> {
+        let transform = transform * cgmath::Matrix4::<f32>::from(node.transform().matrix());
+
+        match node.camera() {
+          Some(camera) => {
+            let view: cgmath::Matrix4<f32> = transform;
+
+            let proj = match camera.projection() {
+              Projection::Orthographic(orthographic) => {
+                // TODO! Figure out how to interpret the orthographic struct gltf gives us.
+                cgmath::Matrix4::identity()
+              },
+              Projection::Perspective(perspective) => {
+                cgmath::perspective(
+                  cgmath::Rad(perspective.yfov()), 
+                  aspect, 
+                  perspective.znear(), 
+                  perspective.zfar().unwrap_or(10000.0))
+              }
+            };
+
+            Some(view * proj)
+          },
+          None => {
+            let mut matrix = None;
+            for node in node.children() {
+              matrix = find_camera_matrix(aspect, node, transform);
+            }
+            matrix
+          }
+        }
+      };
+
+      for scene in gltf.scenes() {
+        for node in scene.nodes() {
+          if let Some(mat) = find_camera_matrix(aspect, node, cgmath::Matrix4::identity()) {
+            view_proj = mat;
+          }
+        }
+      }
+
+      view_proj
+    };
+
+    Self { 
+      background_image_name: background_image_name.to_string(),
+      background_depth_name: background_depth_name.to_string(),
+      view_proj
+    }
+  }
 }
 
 // Resource for the system that draws the field background.
@@ -126,64 +203,61 @@ impl FromWorld for FieldBackgroundRendererResource {
   }
 }
 
-pub (super) fn render(query: Query<&FieldBackground>, context: Res<super::RenderContext>, resource: Local<FieldBackgroundRendererResource>, 
+pub (super) fn render(field: Res<Field>, context: Res<super::RenderContext>, resource: Local<FieldBackgroundRendererResource>, 
   mut texture_manager: ResMut<super::texture_manager::TextureManager>) {
   
   let dest_view = context.post_process_texture.create_view(&TextureViewDescriptor::default());
 
-  log::debug!("Rendering field backgrounds!");
+  // Continue to draw the background image.
+  log::debug!("Rendering field background: {}", &field.background_image_name);
 
-  for field_background in query.iter() {
-    log::debug!("Rendering field background: {}", &field_background.background_image);
+  let texture = texture_manager.get_texture(&context.device, &context.queue, &field.background_image_name).unwrap();
+  let texture_view = texture.create_view(&TextureViewDescriptor::default());
 
-    let texture = texture_manager.get_texture(&context.device, &context.queue, &field_background.background_image).unwrap();
-    let texture_view = texture.create_view(&TextureViewDescriptor::default());
+  let bind_group = context.device.create_bind_group(
+      &wgpu::BindGroupDescriptor {
+          label: Some("Field Background Renderer Bind Group"),
+          layout: &resource.bind_group_layout,
+          entries: &[
+              wgpu::BindGroupEntry {
+                  binding: 0,
+                  resource: wgpu::BindingResource::TextureView(&texture_view)
+              },
+              wgpu::BindGroupEntry {
+                  binding: 1,
+                  resource: wgpu::BindingResource::Sampler(&resource.sampler)
+              }
+          ]
+      }
+  );
 
-    let bind_group = context.device.create_bind_group(
-        &wgpu::BindGroupDescriptor {
-            label: Some("Field Background Renderer Bind Group"),
-            layout: &resource.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&texture_view)
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&resource.sampler)
-                }
-            ]
-        }
-    );
-  
-    let mut encoder = context.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("Field Background Renderer Encoder.")
-    });
-  
-    {
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Field Background Renderer Render Pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &dest_view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                    store: true
-                }
-            })],
-            depth_stencil_attachment: None
-        });
-  
-        render_pass.set_pipeline(&resource.render_pipeline);
-  
-        // Bind the texture.
-        render_pass.set_bind_group(0, &bind_group, &[]);
-        
-        // Set the vertex buffer and draw.
-        render_pass.set_vertex_buffer(0, resource.vertex_buffer.slice(..));
-        render_pass.draw(0..fullscreen_quad::POS_TEX_VERTICES.len() as u32, 0..1);
-    }
-  
-    context.queue.submit(Some(encoder.finish()));
+  let mut encoder = context.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+      label: Some("Field Background Renderer Encoder.")
+  });
+
+  {
+      let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+          label: Some("Field Background Renderer Render Pass"),
+          color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+              view: &dest_view,
+              resolve_target: None,
+              ops: wgpu::Operations {
+                  load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                  store: true
+              }
+          })],
+          depth_stencil_attachment: None
+      });
+
+      render_pass.set_pipeline(&resource.render_pipeline);
+
+      // Bind the texture.
+      render_pass.set_bind_group(0, &bind_group, &[]);
+      
+      // Set the vertex buffer and draw.
+      render_pass.set_vertex_buffer(0, resource.vertex_buffer.slice(..));
+      render_pass.draw(0..fullscreen_quad::POS_TEX_VERTICES.len() as u32, 0..1);
   }
+
+  context.queue.submit(Some(encoder.finish()));
 }

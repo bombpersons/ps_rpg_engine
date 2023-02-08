@@ -19,14 +19,15 @@ async fn main() {
     // Create the bevy world.
     let mut world = World::new();
 
-    world.spawn(
-     renderer::field::FieldBackground { background_image: "test_background".to_string() } 
+    // Add a test field.
+    world.insert_resource(
+     renderer::field::Field::from_gltf("test_field", "test_field_depth", Path::new("fields/test_field.gltf"))
     );
 
     // Add texture manager.
     let textures = {
       let mut map = HashMap::new();
-      map.insert("test_background".to_string(), PathBuf::from(r"fields/test_field.png"));
+      map.insert("test_field".to_string(), PathBuf::from(r"fields/test_field.png"));
 
       map
     };

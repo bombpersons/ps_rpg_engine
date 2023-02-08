@@ -4,9 +4,13 @@ use wgpu::{Device, Queue, RenderPipeline, Surface, SurfaceConfiguration, Texture
 
 use bevy_ecs::prelude::*;
 
+pub mod camera;
+
 pub mod texture_manager;
+pub mod model_manager;
 
 pub mod model;
+
 pub mod field;
 pub mod post_process;
 pub mod fullscreen_quad;
@@ -200,7 +204,7 @@ fn render(context: ResMut<RenderContext>, resource: Local<RenderResource>) {
 
     {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("WaveSim_RenderPass"),
+            label: Some("Main_RenderPass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &texture_view,
                 resolve_target: None,
@@ -231,8 +235,9 @@ pub fn init<W: HasRawWindowHandle + HasRawDisplayHandle>(world: &mut World, wind
 
     // Create the systems.
     SystemSet::new().label("Render Systems")
-        .with_system(resize)
-        .with_system(render)
-        .with_system(field::render)
+        .with_system(resize.before(post_process::render))
+        .with_system(render.before(field::render))
+        .with_system(field::render.before(model::render))
+        .with_system(model::render.before(post_process::render))
         .with_system(post_process::render)
 }
